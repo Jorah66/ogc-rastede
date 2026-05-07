@@ -1,0 +1,46 @@
+{
+  "name": "Oldenburgischer Golfclub e.V.",
+  "short_name": "OGC Rastede",
+  "description": "Die offizielle App des Oldenburgischen Golfclub e.V. Rastede",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a3a0e",
+  "theme_color": "#1a3a0e",
+  "lang": "de",
+  "categories": ["sports", "lifestyle"],
+  "icons": [
+    { "src": "icon-72.png",  "sizes": "72x72",   "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-96.png",  "sizes": "96x96",   "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-152.png", "sizes": "152x152", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "News",
+      "short_name": "News",
+      "description": "Aktuelle Clubnachrichten",
+      "url": "./index.html#news",
+      "icons": [{ "src": "icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Turnierkalender",
+      "short_name": "Turniere",
+      "description": "Turniere 2026",
+      "url": "./index.html#turnier",
+      "icons": [{ "src": "icon-96.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Scorekarte",
+      "short_name": "Score",
+      "description": "Spielvorgabe berechnen",
+      "url": "./index.html#platz",
+      "icons": [{ "src": "icon-96.png", "sizes": "96x96" }]
+    }
+  ]
+}
