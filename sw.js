@@ -1,234 +1,143 @@
-// ════════════════════════════════════════════════════════════════
-//  OGC Rastede – Service Worker v1.2
+// ═══════════════════════════════════════════════════════════
+//  OGC Rastede – Service Worker
 //  Oldenburgischer Golfclub e.V.
-//  Strategie: Cache-First für Assets, Network-First für API/News
-// ════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 
-const CACHE_NAME      = 'ogc-app-v1.2';
-const CACHE_STATIC    = 'ogc-static-v1.2';
-const CACHE_DYNAMIC   = 'ogc-dynamic-v1.2';
+const CACHE_NAME = 'ogc-rastede-v1';
+const OFFLINE_URL = './index.html';
 
-// ── Dateien, die beim Install sofort gecacht werden ──────────────
-const STATIC_ASSETS = [
+// Dateien, die beim Install sofort gecacht werden
+const PRECACHE_URLS = [
   './',
   './index.html',
   './manifest.json',
   './icon-72.png',
-  './icon-96.png',
-  './icon-128.png',
-  './icon-144.png',
-  './icon-152.png',
   './icon-192.png',
-  './icon-384.png',
   './icon-512.png',
-  // Google Fonts werden dynamisch gecacht (siehe DYNAMIC_DOMAINS)
+  'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap',
 ];
 
-// ── Domains/Pfade, die dynamisch gecacht werden ──────────────────
-const DYNAMIC_CACHE_PATTERNS = [
-  /fonts\.googleapis\.com/,
-  /fonts\.gstatic\.com/,
-  /oldenburgischer-golfclub\.de\/wp-content\/uploads/,  // Bilder von der Website
-];
-
-// ── API-Calls: immer Network-First (nie cachen) ──────────────────
-const NETWORK_ONLY_PATTERNS = [
-  /oldenburgischer-golfclub\.de\/wp-json/,   // WordPress News API
-  /calendar\.google\.com/,
-  /albatros9\.net/,
-];
-
-// ────────────────────────────────────────────────────────────────
-//  INSTALL – Static Assets in Cache laden
-// ────────────────────────────────────────────────────────────────
+// ── Install ──────────────────────────────────────────────────
 self.addEventListener('install', event => {
-  console.log('[OGC SW] Install – Cache wird befüllt');
+  console.log('[SW] Install');
   event.waitUntil(
-    caches.open(CACHE_STATIC)
-      .then(cache => {
-        // ignoreSearch: URL-Parameter ignorieren
-        return cache.addAll(STATIC_ASSETS).catch(err => {
-          console.warn('[OGC SW] Einige Assets konnten nicht gecacht werden:', err);
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(PRECACHE_URLS).catch(err => {
+        // Einzelne Fehler (z.B. fehlende Icons) nicht abbrechend
+        console.warn('[SW] Precache Fehler (wird ignoriert):', err);
+      });
+    }).then(() => self.skipWaiting())
+  );
+});
+
+// ── Activate ─────────────────────────────────────────────────
+self.addEventListener('activate', event => {
+  console.log('[SW] Activate');
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys
+          .filter(key => key !== CACHE_NAME)
+          .map(key => {
+            console.log('[SW] Alten Cache löschen:', key);
+            return caches.delete(key);
+          })
+      )
+    ).then(() => self.clients.claim())
+  );
+});
+
+// ── Fetch ─────────────────────────────────────────────────────
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+
+  // WordPress API: Network first, Cache fallback
+  if (url.hostname === 'ogcrastede.de' || url.pathname.includes('/wp-json/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Google Fonts: Cache first (langlebig)
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+    event.respondWith(
+      caches.match(event.request).then(cached => {
+        if (cached) return cached;
+        return fetch(event.request).then(response => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          return response;
         });
       })
-      .then(() => self.skipWaiting())
-  );
-});
-
-// ────────────────────────────────────────────────────────────────
-//  ACTIVATE – Alte Caches aufräumen
-// ────────────────────────────────────────────────────────────────
-self.addEventListener('activate', event => {
-  console.log('[OGC SW] Aktiviert – Alte Caches werden bereinigt');
-  const allowedCaches = [CACHE_STATIC, CACHE_DYNAMIC];
-  event.waitUntil(
-    caches.keys()
-      .then(cacheNames => {
-        return Promise.all(
-          cacheNames
-            .filter(name => !allowedCaches.includes(name))
-            .map(name => {
-              console.log('[OGC SW] Lösche alten Cache:', name);
-              return caches.delete(name);
-            })
-        );
-      })
-      .then(() => self.clients.claim())
-  );
-});
-
-// ────────────────────────────────────────────────────────────────
-//  FETCH – Anfragen abfangen
-// ────────────────────────────────────────────────────────────────
-self.addEventListener('fetch', event => {
-  const url = event.request.url;
-
-  // Chrome-Extensions und Non-HTTP ignorieren
-  if (!url.startsWith('http')) return;
-
-  // Network-Only: API-Calls immer frisch vom Server
-  if (NETWORK_ONLY_PATTERNS.some(p => p.test(url))) {
-    event.respondWith(fetchWithFallback(event.request));
+    );
     return;
   }
 
-  // Dynamisch zu cachende Ressourcen (Bilder, Fonts)
-  if (DYNAMIC_CACHE_PATTERNS.some(p => p.test(url))) {
-    event.respondWith(cacheFirst(event.request, CACHE_DYNAMIC));
-    return;
-  }
-
-  // Statische Assets: Cache-First
-  event.respondWith(cacheFirst(event.request, CACHE_STATIC));
+  // Alles andere: Cache first, Network fallback, Offline-Page als letzter Ausweg
+  event.respondWith(
+    caches.match(event.request).then(cached => {
+      if (cached) return cached;
+      return fetch(event.request)
+        .then(response => {
+          if (response.ok && event.request.method === 'GET') {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => {
+          // Offline: Für Navigate-Requests die index.html zurückgeben
+          if (event.request.mode === 'navigate') {
+            return caches.match(OFFLINE_URL);
+          }
+        });
+    })
+  );
 });
 
-// ────────────────────────────────────────────────────────────────
-//  PUSH – Benachrichtigungen empfangen
-// ────────────────────────────────────────────────────────────────
+// ── Push Notifications ────────────────────────────────────────
 self.addEventListener('push', event => {
-  if (!event.data) return;
-
-  let payload;
-  try {
-    payload = event.data.json();
-  } catch (e) {
-    payload = {
-      title: 'OGC Rastede',
-      body: event.data.text(),
-      icon: './icon-192.png',
-    };
+  let data = { title: 'OGC Rastede', body: 'Neue Nachricht', icon: './icon-192.png' };
+  if (event.data) {
+    try { data = { ...data, ...event.data.json() }; }
+    catch (e) { data.body = event.data.text(); }
   }
-
-  const options = {
-    body:    payload.body   || 'Neue Mitteilung vom OGC',
-    icon:    payload.icon   || './icon-192.png',
-    badge:   payload.badge  || './icon-72.png',
-    image:   payload.image  || undefined,
-    tag:     payload.tag    || 'ogc-notification',
-    renotify: true,
-    vibrate: [200, 100, 200],
-    data: {
-      url: payload.url || './',
-      dateOfArrival: Date.now(),
-    },
-    actions: [
-      { action: 'open',    title: 'Öffnen' },
-      { action: 'dismiss', title: 'Schließen' },
-    ],
-  };
-
   event.waitUntil(
-    self.registration.showNotification(payload.title || 'OGC Rastede', options)
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon || './icon-192.png',
+      badge: './icon-72.png',
+      vibrate: [100, 50, 100],
+      data: { url: data.url || './' },
+      actions: [
+        { action: 'open', title: 'Öffnen' },
+        { action: 'close', title: 'Schließen' }
+      ]
+    })
   );
 });
 
-// ────────────────────────────────────────────────────────────────
-//  NOTIFICATION CLICK
-// ────────────────────────────────────────────────────────────────
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-
-  if (event.action === 'dismiss') return;
-
-  const targetUrl = event.notification.data?.url || './';
-
+  if (event.action === 'close') return;
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then(clientList => {
-        // Bereits offenes Fenster fokussieren
-        for (const client of clientList) {
-          if (client.url.includes('index') && 'focus' in client) {
-            return client.focus();
-          }
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      const target = (event.notification.data && event.notification.data.url) || './';
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          return client.focus();
         }
-        // Neues Fenster öffnen
-        if (clients.openWindow) {
-          return clients.openWindow(targetUrl);
-        }
-      })
+      }
+      return clients.openWindow(target);
+    })
   );
 });
-
-// ────────────────────────────────────────────────────────────────
-//  BACKGROUND SYNC (für spätere Offline-Formular-Unterstützung)
-// ────────────────────────────────────────────────────────────────
-self.addEventListener('sync', event => {
-  if (event.tag === 'ogc-sync') {
-    console.log('[OGC SW] Background Sync ausgelöst');
-    // Hier könnten offline gespeicherte Daten synchronisiert werden
-  }
-});
-
-// ────────────────────────────────────────────────────────────────
-//  HILFSFUNKTIONEN
-// ────────────────────────────────────────────────────────────────
-
-/**
- * Cache-First Strategie:
- * 1. Aus Cache laden (schnell, offline-fähig)
- * 2. Falls nicht im Cache → Netzwerk → in Cache speichern
- */
-async function cacheFirst(request, cacheName) {
-  try {
-    const cache    = await caches.open(cacheName);
-    const cached   = await cache.match(request);
-    if (cached) return cached;
-
-    const response = await fetch(request);
-    if (response && response.status === 200 && response.type !== 'opaque') {
-      // Nur erfolgreiche Antworten cachen
-      const responseClone = response.clone();
-      cache.put(request, responseClone);
-    }
-    return response;
-  } catch (err) {
-    // Offline-Fallback: App-Shell aus Cache
-    const cache    = await caches.open(CACHE_STATIC);
-    const fallback = await cache.match('./index.html');
-    return fallback || new Response('Offline – OGC App nicht verfügbar', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-    });
-  }
-}
-
-/**
- * Network-First mit Offline-Fallback:
- * 1. Netzwerk versuchen
- * 2. Bei Fehler: leere JSON-Antwort für API-Calls
- */
-async function fetchWithFallback(request) {
-  try {
-    return await fetch(request);
-  } catch (err) {
-    console.warn('[OGC SW] Netzwerkfehler, Offline-Fallback:', request.url);
-    // Für API-Calls: leeres JSON zurückgeben
-    if (request.headers.get('accept')?.includes('json')) {
-      return new Response('[]', {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    return new Response('', { status: 503 });
-  }
-}
