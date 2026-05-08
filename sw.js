@@ -1,60 +1,69 @@
-// ═══════════════════════════════════════════════════════════
-// OGC Rastede – Service Worker
-// Offline-Caching + Push Notifications
-// ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+//  OGC Rastede – Service Worker
+//  Oldenburgischer Golfclub e.V.
+// ═══════════════════════════════════════════════════════
 
 const CACHE_NAME = 'ogc-rastede-v1';
-const STATIC_ASSETS = [
-  './',
+
+// Dateien, die beim Installieren gecacht werden (App Shell)
+const PRECACHE_URLS = [
   './index.html',
   './manifest.json',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  // Google Fonts (werden beim ersten Abruf gecacht)
+  'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap'
 ];
 
-// ── Install: statische Dateien cachen ──────────────────────
+// ── Install: App Shell cachen ──────────────────────────
 self.addEventListener('install', event => {
-  console.log('[SW] Installing...');
+  console.log('[OGC SW] Installing...');
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      console.log('[SW] Caching static assets');
-      return cache.addAll(STATIC_ASSETS);
-    })
+      return cache.addAll(PRECACHE_URLS.map(url => new Request(url, { mode: 'cors' })))
+        .catch(err => console.warn('[OGC SW] Precache partial fail:', err));
+    }).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
-// ── Activate: alte Caches löschen ─────────────────────────
+// ── Activate: Alte Caches löschen ─────────────────────
 self.addEventListener('activate', event => {
-  console.log('[SW] Activating...');
+  console.log('[OGC SW] Activating...');
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
         keys
           .filter(key => key !== CACHE_NAME)
           .map(key => {
-            console.log('[SW] Deleting old cache:', key);
+            console.log('[OGC SW] Deleting old cache:', key);
             return caches.delete(key);
           })
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// ── Fetch: Cache-first für statische Assets,
-//           Network-first für API/WordPress ─────────────────
+// ── Fetch: Cache-First für App Shell, Network-First für API ──
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // WordPress REST API → immer netzwerk, fallback auf Cache
-  if (url.hostname.includes('oldenburgischer-golfclub.de')) {
+  // WordPress REST API & externe Dienste → immer Network, Fallback Cache
+  const networkFirst = [
+    'oldenburgischer-golfclub.de/wp-json',
+    'api.open-meteo.com',
+    'nominatim.openstreetmap.org'
+  ];
+
+  const isNetworkFirst = networkFirst.some(pattern => url.href.includes(pattern));
+
+  if (isNetworkFirst) {
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          // Erfolgreiche Antwort in Cache speichern
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+          }
           return response;
         })
         .catch(() => caches.match(event.request))
@@ -62,62 +71,68 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Statische Assets → Cache-first
+  // App Shell & statische Assets → Cache-First
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
+
       return fetch(event.request).then(response => {
+        // Nur gültige Antworten cachen (kein opaque für Sicherheit)
         if (!response || response.status !== 200 || response.type === 'opaque') {
           return response;
         }
         const clone = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return response;
+      }).catch(() => {
+        // Offline-Fallback: index.html für Navigation
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
       });
     })
   );
 });
 
-// ── Push Notifications ─────────────────────────────────────
+// ── Push Notifications ─────────────────────────────────
 self.addEventListener('push', event => {
-  let data = { title: 'OGC Rastede', body: 'Neue Nachricht', icon: './icon-192.png' };
-  if (event.data) {
-    try { data = { ...data, ...event.data.json() }; } catch(e) {}
-  }
+  if (!event.data) return;
+
+  let data = {};
+  try { data = event.data.json(); } catch { data = { title: 'OGC Rastede', body: event.data.text() }; }
+
+  const options = {
+    body: data.body || 'Neue Nachricht vom Oldenburgischer Golfclub',
+    icon: './icon-192.png',
+    badge: './icon-96.png',
+    vibrate: [100, 50, 100],
+    data: { url: data.url || './index.html' },
+    actions: [
+      { action: 'open', title: 'Öffnen' },
+      { action: 'close', title: 'Schließen' }
+    ]
+  };
 
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body:    data.body,
-      icon:    data.icon || './icon-192.png',
-      badge:   './icon-72.png',
-      tag:     data.tag || 'ogc-notification',
-      data:    { url: data.url || './' },
-      actions: data.actions || [],
-      vibrate: [200, 100, 200]
-    })
+    self.registration.showNotification(data.title || 'OGC Rastede', options)
   );
 });
 
-// ── Notification Click ─────────────────────────────────────
+// ── Notification Click ─────────────────────────────────
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || './';
+  if (event.action === 'close') return;
+
+  const targetUrl = event.notification.data?.url || './index.html';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
       for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
+        if (client.url.includes('index.html') && 'focus' in client) {
           return client.focus();
         }
       }
-      return clients.openWindow(targetUrl);
+      if (clients.openWindow) return clients.openWindow(targetUrl);
     })
   );
-});
-
-// ── Background Sync (für spätere Erweiterung) ─────────────
-self.addEventListener('sync', event => {
-  if (event.tag === 'sync-scores') {
-    console.log('[SW] Background sync: scores');
-  }
 });
