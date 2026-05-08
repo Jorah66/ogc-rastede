@@ -1,17 +1,20 @@
 // ═══════════════════════════════════════════════════════════
-//  OGC Rastede – Service Worker
+//  OGC Rastede – Service Worker v1.0
 //  Oldenburgischer Golfclub e.V.
 // ═══════════════════════════════════════════════════════════
 
 const CACHE_NAME = 'ogc-rastede-v1';
 const OFFLINE_URL = './index.html';
 
-// Dateien, die beim Install sofort gecacht werden
 const PRECACHE_URLS = [
   './',
   './index.html',
   './manifest.json',
   './icon-72.png',
+  './icon-96.png',
+  './icon-128.png',
+  './icon-144.png',
+  './icon-152.png',
   './icon-192.png',
   './icon-512.png',
   'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap',
@@ -19,29 +22,26 @@ const PRECACHE_URLS = [
 
 // ── Install ──────────────────────────────────────────────────
 self.addEventListener('install', event => {
-  console.log('[SW] Install');
+  console.log('[OGC SW] Install');
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(PRECACHE_URLS).catch(err => {
-        // Einzelne Fehler (z.B. fehlende Icons) nicht abbrechend
-        console.warn('[SW] Precache Fehler (wird ignoriert):', err);
-      });
+      return Promise.allSettled(
+        PRECACHE_URLS.map(url => cache.add(url).catch(err => {
+          console.warn('[OGC SW] Precache skip:', url, err.message);
+        }))
+      );
     }).then(() => self.skipWaiting())
   );
 });
 
 // ── Activate ─────────────────────────────────────────────────
 self.addEventListener('activate', event => {
-  console.log('[SW] Activate');
+  console.log('[OGC SW] Activate');
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
-        keys
-          .filter(key => key !== CACHE_NAME)
-          .map(key => {
-            console.log('[SW] Alten Cache löschen:', key);
-            return caches.delete(key);
-          })
+        keys.filter(key => key !== CACHE_NAME)
+            .map(key => { console.log('[OGC SW] Cache löschen:', key); return caches.delete(key); })
       )
     ).then(() => self.clients.claim())
   );
@@ -51,7 +51,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // WordPress API: Network first, Cache fallback
+  // WordPress API → Network first, Cache fallback
   if (url.hostname === 'ogcrastede.de' || url.pathname.includes('/wp-json/')) {
     event.respondWith(
       fetch(event.request)
@@ -67,7 +67,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Google Fonts: Cache first (langlebig)
+  // Google Fonts → Cache first (langlebig)
   if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     event.respondWith(
       caches.match(event.request).then(cached => {
@@ -82,7 +82,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Alles andere: Cache first, Network fallback, Offline-Page als letzter Ausweg
+  // Alles andere → Cache first, Network fallback, Offline-Page
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
@@ -95,7 +95,6 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(() => {
-          // Offline: Für Navigate-Requests die index.html zurückgeben
           if (event.request.mode === 'navigate') {
             return caches.match(OFFLINE_URL);
           }
@@ -119,7 +118,7 @@ self.addEventListener('push', event => {
       vibrate: [100, 50, 100],
       data: { url: data.url || './' },
       actions: [
-        { action: 'open', title: 'Öffnen' },
+        { action: 'open',  title: 'Öffnen'    },
         { action: 'close', title: 'Schließen' }
       ]
     })
@@ -133,11 +132,14 @@ self.addEventListener('notificationclick', event => {
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
       const target = (event.notification.data && event.notification.data.url) || './';
       for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          return client.focus();
-        }
+        if (client.url.includes(self.location.origin) && 'focus' in client) return client.focus();
       }
       return clients.openWindow(target);
     })
   );
+});
+
+// ── Online/Offline ────────────────────────────────────────────
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
