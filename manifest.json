@@ -2,7 +2,7 @@
   "name": "Oldenburgischer Golfclub e.V.",
   "short_name": "OGC Rastede",
   "description": "Die offizielle App des Oldenburgischen Golfclub e.V. Rastede – News, Turniere, Platzinfos und Mitgliederbereich.",
-  "start_url": "./ogc-app-prototyp-v5_12.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
@@ -74,14 +74,14 @@
       "name": "Turnierkalender",
       "short_name": "Turniere",
       "description": "Turnierkalender 2026",
-      "url": "./ogc-app-prototyp-v5_12.html#turnier",
+      "url": "./#turnier",
       "icons": [{ "src": "icon-96.png", "sizes": "96x96" }]
     },
     {
       "name": "News",
       "short_name": "News",
       "description": "Aktuelle Nachrichten",
-      "url": "./ogc-app-prototyp-v5_12.html#news",
+      "url": "./#news",
       "icons": [{ "src": "icon-96.png", "sizes": "96x96" }]
     }
   ],

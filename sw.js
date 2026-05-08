@@ -11,7 +11,7 @@ const CACHE_DYNAMIC   = 'ogc-dynamic-v1.2';
 // ── Dateien, die beim Install sofort gecacht werden ──────────────
 const STATIC_ASSETS = [
   './',
-  './ogc-app-prototyp-v5_12.html',
+  './index.html',
   './manifest.json',
   './icon-72.png',
   './icon-96.png',
@@ -157,7 +157,7 @@ self.addEventListener('notificationclick', event => {
       .then(clientList => {
         // Bereits offenes Fenster fokussieren
         for (const client of clientList) {
-          if (client.url.includes('ogc') && 'focus' in client) {
+          if (client.url.includes('index') && 'focus' in client) {
             return client.focus();
           }
         }
@@ -204,7 +204,7 @@ async function cacheFirst(request, cacheName) {
   } catch (err) {
     // Offline-Fallback: App-Shell aus Cache
     const cache    = await caches.open(CACHE_STATIC);
-    const fallback = await cache.match('./ogc-app-prototyp-v5_12.html');
+    const fallback = await cache.match('./index.html');
     return fallback || new Response('Offline – OGC App nicht verfügbar', {
       status: 503,
       headers: { 'Content-Type': 'text/plain;charset=utf-8' }
