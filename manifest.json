@@ -1,7 +1,7 @@
 {
   "name": "Oldenburgischer Golfclub e.V.",
   "short_name": "OGC Rastede",
-  "description": "Die offizielle App des Oldenburgischen Golfclubs e.V. in Rastede – News, Turnierkalender, Platzinfos, Lochkarten & mehr.",
+  "description": "Die offizielle App des Oldenburgischen Golfclubs e.V. – News, Turniere, Platzinfos und mehr.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -18,34 +18,16 @@
       "purpose": "any"
     },
     {
-      "src": "icon-96.png",
-      "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-128.png",
-      "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-144.png",
-      "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-152.png",
-      "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
       "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "icon-512.png",
@@ -56,20 +38,20 @@
   ],
   "shortcuts": [
     {
-      "name": "Turnierkalender 2026",
+      "name": "Turnierkalender",
       "short_name": "Turniere",
-      "description": "Alle Turniere 2026 auf einen Blick",
-      "url": "./index.html",
-      "icons": [{ "src": "icon-96.png", "sizes": "96x96" }]
+      "description": "Turnierkalender 2026 anzeigen",
+      "url": "./index.html#turniere",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Platz & Lochkarten",
-      "short_name": "Platz",
-      "description": "Aktueller Platzstatus und Lochkarten",
-      "url": "./index.html",
-      "icons": [{ "src": "icon-96.png", "sizes": "96x96" }]
+      "name": "News",
+      "short_name": "News",
+      "description": "Aktuelle News des OGC",
+      "url": "./index.html#news",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
     }
   ],
-  "related_applications": [],
+  "screenshots": [],
   "prefer_related_applications": false
 }
